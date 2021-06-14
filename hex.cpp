@@ -5,6 +5,10 @@
 #include <queue>
 #include <utility>
 #include <time.h>
+#include <random>
+#include <algorithm>
+#include <chrono>
+#include <thread>
 using namespace std;
 
 
@@ -69,14 +73,14 @@ class hex_game{
                 modify_board(x,y,red);
 
                 //If player wins, game is over
-                if(game_over(red))
+                if(game_over(this->board,red))
                     return true;
                 
                 //Computer turn
                 computer_move();
 
                 //If computer wins, game is over
-                if(game_over(blue))
+                if(game_over(this->board,blue))
                     return false;        
             }
         }
@@ -93,11 +97,11 @@ class hex_game{
         
         
         //Returns whether two vertices are connected
-        bool is_connected(int x1,int y1,int x2, int y2){
+        bool is_connected(vector<vector<player> > h_board,int x1,int y1,int x2, int y2){
 
             //Bad coordinates, therefore not connected
-            if(x1 < 0 || x1 >= board_size || x2 < 0 || x2 >= board_size ||
-               y1 < 0 || y1 >= board_size || y2 < 0 || y2 >= board_size)
+            if(x1 < 0 || x1 >= h_board.size() || x2 < 0 || x2 >= h_board.size() ||
+               y1 < 0 || y1 >= h_board.size()|| y2 < 0 || y2 >= h_board.size())
               return false;
             
             //Each internal space has 6 neighbors, dont have to worry about edge cases, already taken care of with
@@ -124,8 +128,8 @@ class hex_game{
         }
 
         //returns whether the space is red blue or untaken
-        player space_type(int x, int y){
-            return board[x][y];
+        player space_type(vector<vector<player> > h_board,int x, int y){
+            return h_board[x][y];
         }
 
 
@@ -134,17 +138,72 @@ class hex_game{
             board[x][y] = p;
         }
 
+
+        pair<int,int> monte_carlo(){
+            vector<vector<player> > board_cpy = vector<vector<player> >(board);
+            int x_final,y_final,most_wins = -1;
+
+            //Check each space for best move
+            for(int i = 0;i < board_cpy.size();i++){
+                for(int j = 0;j < board_cpy.size();j++){
+
+                    
+                    //If the move is valid, run a trial
+                    if(board_cpy[i][j] == blank){
+                        board_cpy[i][j] = blue;
+                        vector<pair<int,int> > valid_moves;
+
+                        //Make a vector of valid moves to be shuffled
+                        for(int u = 0;u < board_cpy.size();u++){
+                            for(int t = 0;t < board_cpy.size();t++){
+                                if(board_cpy[u][t] == blank)
+                                    valid_moves.push_back(pair<int,int>(u,t));
+                            }
+                        }
+                        int num_wins = 0;
+                        //Run trials
+                        for(int k = 0;k < 1000;k++){
+                            //obtain time based seed
+                            unsigned seed = chrono::system_clock::now().time_since_epoch().count();
+                            shuffle(valid_moves.begin(),valid_moves.end(),default_random_engine(seed));
+                            player curr_p_type = red;
+
+                            for(pair<int,int> space: valid_moves){
+                                board_cpy[space.first][space.second] = curr_p_type;
+                                if(curr_p_type == red){
+                                    curr_p_type = blue;
+                                }else{
+                                    curr_p_type = red;
+                                } 
+                            }
+                            if(game_over(board_cpy,blue))
+                                num_wins++;
+                            
+                        }
+
+                        //New best move
+                        if(num_wins > most_wins){
+                            most_wins = num_wins;
+                            x_final = i;
+                            y_final = j;
+                        }
+                        
+                        //Remake board copy to be the same as the board
+                        for(pair<int,int> space: valid_moves){
+                            board_cpy[space.first][space.second] = blank;
+                        }
+                        board_cpy[i][j] = blank;
+                    }
+                }
+            }
+            return pair<int,int>(x_final,y_final);
+        }
         //Just picks a random valid space
         void computer_move(){
            
-            int x = random_number(board_size);
-            int y = random_number(board_size);
-            
-            while(!valid_move(x,y)){
-                x = random_number(board_size);
-                y = random_number(board_size);
-            }
-            modify_board(x,y,blue);
+            pair<int,int> move = monte_carlo();
+
+            modify_board(move.first,move.second,blue);
         }
 
         //Returns a number between 0 and max
@@ -172,14 +231,14 @@ class hex_game{
 
         //Returns true if the inputted player has won
         //Uses a depth first search type algorithm
-        bool game_over(player p_type){
+        bool game_over(vector<vector<player> > h_board,player p_type){
             queue<pair<int,int> > unvisited; //Keeps track of unvisited coordinates
             vector<pair<int,int> > visited; //Keeps track of visited coordinates
             
             //Check if any space on the first row is taken by the player
             if(p_type == red){ 
-                for(int y = 0;y < board_size;y++){
-                    if(space_type(0,y) == red){
+                for(int y = 0;y < h_board.size();y++){
+                    if(space_type(h_board,0,y) == red){
                         unvisited.push(pair<int,int>(0,y));
                     }
                 }
@@ -188,8 +247,8 @@ class hex_game{
 
             //Check if any space in the first column is taken by the computer
             if(p_type == blue){
-                for(int x = 0;x < board_size;x++){
-                    if(space_type(x,0) == blue){
+                for(int x = 0;x < h_board.size();x++){
+                    if(space_type(h_board,x,0) == blue){
                         unvisited.push(pair<int,int>(x,0));
                     }
                 }
@@ -205,12 +264,12 @@ class hex_game{
                 int y = space.second;
 
                 //If its the player and they have reached the last row, they win
-                if(p_type == red && x == board_size-1){
+                if(p_type == red && x == h_board.size()-1){
                    return true;
                 }
 
                 //If its the computer and they have reached the last column, they win
-                if(p_type == blue && y == board_size-1){
+                if(p_type == blue && y == h_board.size()-1){
                     return true;
                 }
 
@@ -221,32 +280,32 @@ class hex_game{
                 //Check if each neighbor is is taken by the inputted player and that it hasnt been visited yet, if it hasnt been visited
                 //Add it to unvisited queue
 
-                if(is_connected(x,y,x-1,y) && space_type(x-1,y) == p_type &&
+                if(is_connected(h_board,x,y,x-1,y) && space_type(h_board,x-1,y) == p_type &&
                    !contains_pair(visited,x-1,y)){
                      unvisited.push(pair<int,int>(x-1,y));
                 }
 
-                if(is_connected(x,y,x-1,y+1) && space_type(x-1,y+1) == p_type &&
+                if(is_connected(h_board,x,y,x-1,y+1) && space_type(h_board,x-1,y+1) == p_type &&
                    !contains_pair(visited,x-1,y+1)){
                      unvisited.push(pair<int,int>(x-1,y+1));
                 }
 
-                if(is_connected(x,y,x,y-1) && space_type(x,y-1) == p_type &&
+                if(is_connected(h_board,x,y,x,y-1) && space_type(h_board,x,y-1) == p_type &&
                    !contains_pair(visited,x,y-1)){
                      unvisited.push(pair<int,int>(x,y-1));
                 }
 
-                if(is_connected(x,y,x,y+1) && space_type(x,y+1) == p_type &&
+                if(is_connected(h_board,x,y,x,y+1) && space_type(h_board,x,y+1) == p_type &&
                    !contains_pair(visited,x,y+1)){
                     unvisited.push(pair<int,int>(x,y+1));
                 }
 
-                if(is_connected(x,y,x+1,y-1) && space_type(x+1,y-1) == p_type &&
+                if(is_connected(h_board,x,y,x+1,y-1) && space_type(h_board,x+1,y-1) == p_type &&
                    !contains_pair(visited,x+1,y-1)){
                      unvisited.push(pair<int,int>(x+1,y-1));
                 }
 
-                if(is_connected(x,y,x+1,y) && space_type(x+1,y) == p_type &&
+                if(is_connected(h_board,x,y,x+1,y) && space_type(h_board,x+1,y) == p_type &&
                    !contains_pair(visited,x+1,y)){
                     unvisited.push(pair<int,int>(x+1,y));
                 }
@@ -270,9 +329,9 @@ class hex_game{
                 cout << repeat(" ",spaces++);
                 for(int j = 0;j < board_size;j++){
                     if(j == board_size-1){
-                        cout << space_type(i,j) << endl;
+                        cout << space_type(this->board,i,j) << endl;
                     }else{
-                        cout << space_type(i,j) << " - ";
+                        cout << space_type(this->board,i,j) << " - ";
                     }
                 }
                 cout << repeat(" ",spaces++);
@@ -296,7 +355,7 @@ class hex_game{
 };
 
 int main(){
-    hex_game h(7);
+    hex_game h(5);
     if(h.play_game()){
         cout << "You win!!" << endl;
     }else{
