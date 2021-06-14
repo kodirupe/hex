@@ -17,7 +17,7 @@ using namespace std;
 enum player {blank,red,blue};
 
 //Outputs for the spaces for the board
-ostream& operator<<(ostream& os,  player p){
+ostream& operator<<(ostream& os,player p){
     switch(p){
         case blank: os << "."; break;
         case red: os << "R"; break;
@@ -97,7 +97,7 @@ class hex_game{
         
         
         //Returns whether two vertices are connected
-        bool is_connected(vector<vector<player> > h_board,int x1,int y1,int x2, int y2){
+        bool is_connected(const vector<vector<player> > h_board,const int x1,const int y1,const int x2,const int y2){
 
             //Bad coordinates, therefore not connected
             if(x1 < 0 || x1 >= h_board.size() || x2 < 0 || x2 >= h_board.size() ||
@@ -128,19 +128,23 @@ class hex_game{
         }
 
         //returns whether the space is red blue or untaken
-        player space_type(vector<vector<player> > h_board,int x, int y){
+        player space_type(const vector<vector<player> > h_board,const int x, const int y){
             return h_board[x][y];
         }
 
 
         //Modifies board 
-        void modify_board(int x, int y,player p){
+        void modify_board(const int x, const int y,player p){
             board[x][y] = p;
         }
 
-
+        //Runs monte carlo simulations to determine the best move for the computer to make
         pair<int,int> monte_carlo(){
+
+            //Make a copy of the board to make simulations on
             vector<vector<player> > board_cpy = vector<vector<player> >(board);
+
+            //Indices of the move the computer will make
             int x_final,y_final,most_wins = -1;
 
             //Check each space for best move
@@ -165,9 +169,13 @@ class hex_game{
                         for(int k = 0;k < 1000;k++){
                             //obtain time based seed
                             unsigned seed = chrono::system_clock::now().time_since_epoch().count();
+
+                            //Shuffle the valid move spaces
                             shuffle(valid_moves.begin(),valid_moves.end(),default_random_engine(seed));
                             player curr_p_type = red;
 
+
+                            //Fill in spaces after the valid move spaces have been moved
                             for(pair<int,int> space: valid_moves){
                                 board_cpy[space.first][space.second] = curr_p_type;
                                 if(curr_p_type == red){
@@ -176,6 +184,8 @@ class hex_game{
                                     curr_p_type = red;
                                 } 
                             }
+
+                            //If the computer won the simulation
                             if(game_over(board_cpy,blue))
                                 num_wins++;
                             
@@ -198,21 +208,22 @@ class hex_game{
             }
             return pair<int,int>(x_final,y_final);
         }
-        //Just picks a random valid space
+        //Makes a move using monte carlo simulations
         void computer_move(){
            
+            //Find the best move using monte carlo simulation
             pair<int,int> move = monte_carlo();
 
             modify_board(move.first,move.second,blue);
         }
 
         //Returns a number between 0 and max
-        int random_number(int max){
+        int random_number(const int max){
             return rand()%max;
         }
 
         //Returns true if the move is valid, false if the move is invalid
-        bool valid_move(int x,int y){
+        bool valid_move(const int x,const int y){
             
             //Invalid coordinate
             if(x < 0 || x >= board_size || y < 0 || y >= board_size)
@@ -231,7 +242,7 @@ class hex_game{
 
         //Returns true if the inputted player has won
         //Uses a depth first search type algorithm
-        bool game_over(vector<vector<player> > h_board,player p_type){
+        bool game_over(const vector<vector<player> > h_board,player p_type){
             queue<pair<int,int> > unvisited; //Keeps track of unvisited coordinates
             vector<pair<int,int> > visited; //Keeps track of visited coordinates
             
@@ -314,7 +325,7 @@ class hex_game{
           }
         
         //Helper function that repeats and returns a given string s, n times
-        string repeat(string s,int n){
+        string repeat(const string s,const int n){
             string product = "";
             for(int i = 0;i < n;i++){
                 product += s;
@@ -343,7 +354,7 @@ class hex_game{
         }
 
         //returns whether or not a vector contains an x,y pair
-        bool contains_pair(vector<pair<int,int > > v,int x,int y){
+        bool contains_pair(const vector<pair<int,int > > v,const int x,const int y){
             for(pair<int,int> p: v){
                 if(p.first == x && p.second == y){
                     return true;
